@@ -1,31 +1,155 @@
-# API Contract for Frontend Integration
+# API Contract for Frontend
 
-## Endpoint: `POST /api/analyze`
+**DO NOT MODIFY THIS CONTRACT WITHOUT BACKEND APPROVAL**
 
-### Request
+---
 
-**Method:** `POST`  
-**Content-Type:** `application/json`
+## Endpoint
 
-**Body:**
+**POST** `/api/analyze`
+
+---
+
+## Request
+
+### Headers
+```
+Content-Type: application/json
+```
+
+### Body
 ```typescript
 {
   artifactContent: string;
 }
 ```
 
-**Example:**
+### Example
 ```json
 {
-  "artifactContent": "module counter(input clk, input reset, output reg [3:0] count);\n  always @(posedge clk or posedge reset) begin\n    if (reset) count <= 4'b0000;\n    else count <= count + 1;\n  end\nendmodule"
+  "artifactContent": "function calculateTotal(items) { ... }"
 }
 ```
 
-### Response
+---
 
-**Success (200 OK):**
+## Response
+
+### Success: 200 OK
+
 ```typescript
 {
+  toolReport: string;
+  agentMessages: {
+    agentRole: "analysis" | "review" | "tradeoff" | "historian";
+    message: string;
+    createdAt: string;
+  }[];
+  decisions: {
+    _id: string;
+    summary: string;
+    rationale: string;
+    createdAt: string;
+  }[];
+}
+```
+
+### Error: 400 Bad Request
+
+```typescript
+{
+  error: string;
+}
+```
+
+### Error: 500 Internal Server Error
+
+```typescript
+{
+  error: string;
+}
+```
+
+---
+
+## Response Field Mapping
+
+| Field | Panel | Usage |
+|-------|-------|-------|
+| `toolReport` | Tool Output panel | Display tool analysis report |
+| `agentMessages` | Agent Dialogue panel | Display messages in order: analysis → review → tradeoff → historian |
+| `decisions` | Decision History panel | Display decisions sorted newest first (by `createdAt` desc) |
+
+---
+
+## Agent Message Order
+
+Agent messages are returned in execution order:
+1. `analysis`
+2. `review`
+3. `tradeoff`
+4. `historian`
+
+**DO NOT** reorder or filter these messages. Display them in the order received.
+
+---
+
+## Decision History Sorting
+
+Sort `decisions` array by `createdAt` descending (newest first).
+
+Use `_id` for unique keys in lists/UI components.
+
+---
+
+## Example Response
+
+```json
+{
+  "toolReport": "Tool Report\n===========\n\nIssues Found:\n1. Missing input validation\n2. No error handling\n\nSuggestions:\n1. Add unit tests for core functionality\n2. Replace console.log with proper logging",
+  "agentMessages": [
+    {
+      "agentRole": "analysis",
+      "message": "{\n  \"keyInsights\": [\"...\"],\n  \"patterns\": [\"...\"]\n}",
+      "createdAt": "2026-01-10T12:00:00.000Z"
+    },
+    {
+      "agentRole": "review",
+      "message": "{\n  \"challenges\": [\"...\"],\n  \"gaps\": [\"...\"]\n}",
+      "createdAt": "2026-01-10T12:00:01.000Z"
+    },
+    {
+      "agentRole": "tradeoff",
+      "message": "{\n  \"tensions\": [\"...\"],\n  \"tradeoffs\": [\"...\"]\n}",
+      "createdAt": "2026-01-10T12:00:02.000Z"
+    },
+    {
+      "agentRole": "historian",
+      "message": "{\n  \"decisionSummary\": \"...\",\n  \"decisionRationale\": \"...\"\n}",
+      "createdAt": "2026-01-10T12:00:03.000Z"
+    }
+  ],
+  "decisions": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "summary": "This is similar to a previous decision where we...",
+      "rationale": "Based on the analysis, review, and tradeoff evaluations, and considering similar past decisions...",
+      "createdAt": "2026-01-10T12:00:04.000Z"
+    }
+  ]
+}
+```
+
+---
+
+## TypeScript Types (for reference)
+
+```typescript
+interface AnalyzeRequest {
+  artifactContent: string;
+}
+
+interface AnalyzeResponse {
   toolReport: string;
   agentMessages: Array<{
     agentRole: "analysis" | "review" | "tradeoff" | "historian";
@@ -39,96 +163,32 @@
     createdAt: string;
   }>;
 }
-```
 
-**Error (400/500):**
-```typescript
-{
+interface AnalyzeError {
   error: string;
 }
 ```
 
 ---
 
-## Frontend UI Mapping
+## Important Notes
 
-### Tool Output Panel → `toolReport`
-- Display as: Plain text or formatted code report
-- Shows tool analysis results and suggestions
-
-### Agent Dialogue Panel → `agentMessages`
-- Display as: List/chat interface showing agent conversations
-- Each message includes:
-  - `agentRole`: Which agent (analysis, review, tradeoff, historian)
-  - `message`: JSON-stringified agent output (parse for display)
-  - `createdAt`: Timestamp for ordering
-- **Display order:** Sequential (as returned in array)
-- **Note:** Messages are JSON strings - parse before rendering
-
-### Decision History Panel → `decisions`
-- Display as: List of decision cards/summaries
-- Each decision includes:
-  - `_id`: Unique identifier for tracking
-  - `summary`: Short decision summary (2-3 sentences)
-  - `rationale`: Full reasoning explanation
-  - `createdAt`: Timestamp
-- **Display order:** Sort by `createdAt` descending (newest first)
-- **Recommendation:** Show summary in collapsed view, rationale in expanded detail
+1. **DO NOT** modify the request/response structure without backend approval
+2. **DO NOT** add additional fields or "improvements" to this contract
+3. **DO** handle errors gracefully (400, 500 status codes)
+4. **DO** display messages in the order received
+5. **DO** sort decisions by `createdAt` descending
+6. **DO** use `_id` as unique key for decision lists
 
 ---
 
-## Example Response
+## Integration Steps
 
-```json
-{
-  "toolReport": "Analysis found 3 potential issues: missing reset logic, potential race condition in state machine, and no test coverage...",
-  "agentMessages": [
-    {
-      "agentRole": "analysis",
-      "message": "{\"insights\": [\"...\"], \"decisionPoints\": [...]}",
-      "createdAt": "2026-01-10T12:00:00.000Z"
-    },
-    {
-      "agentRole": "review",
-      "message": "{\"validation\": \"...\", \"gaps\": [...]}",
-      "createdAt": "2026-01-10T12:00:01.000Z"
-    },
-    {
-      "agentRole": "tradeoff",
-      "message": "{\"tradeoffs\": [\"...\"], \"alternatives\": [...]}",
-      "createdAt": "2026-01-10T12:00:02.000Z"
-    },
-    {
-      "agentRole": "historian",
-      "message": "{\"decisionSummary\": \"...\", \"decisionRationale\": \"...\"}",
-      "createdAt": "2026-01-10T12:00:03.000Z"
-    }
-  ],
-  "decisions": [
-    {
-      "_id": "65a1b2c3d4e5f6g7h8i9j0k1",
-      "summary": "Implement reset functionality to ensure counter starts from known state. Add comprehensive test coverage for edge cases.",
-      "rationale": "This decision addresses the critical gap identified in the counter module where no reset mechanism exists. Similar to a prior decision where we handled sequential logic without reset, we recommend adding synchronous reset with active-high polarity. The tradeoff analysis suggests this approach balances simplicity with reliability...",
-      "createdAt": "2026-01-10T12:00:04.000Z"
-    }
-  ]
-}
-```
+1. Send `artifactContent` from Editor to `/api/analyze`
+2. Display `toolReport` in Tool Output panel
+3. Display `agentMessages` in Agent Dialogue panel (in order)
+4. Display `decisions` in Decision History panel (newest first)
 
 ---
 
-## Notes for Frontend
-
-1. **Agent Messages:** The `message` field contains JSON strings. Parse with `JSON.parse()` before rendering structured content.
-
-2. **Decision Sorting:** Always sort `decisions` array by `createdAt` in descending order to show newest decisions first.
-
-3. **Error Handling:** Check for `error` field in response. Display user-friendly error messages.
-
-4. **Loading States:** This endpoint may take 5-15 seconds depending on LLM response times. Show appropriate loading indicators.
-
-5. **Agent Roles:** Display agent role badges/icons:
-   - `analysis`: 🔍 Analysis Agent
-   - `review`: ✓ Review Agent  
-   - `tradeoff`: ⚖️ Tradeoff Agent
-   - `historian`: 📚 Historian Agent
+**End of Contract**
