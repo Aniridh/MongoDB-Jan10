@@ -13,6 +13,10 @@ export async function findSimilarDecisions(
   embedding: number[],
   limit: number = 5
 ): Promise<SimilarDecision[]> {
+  if (!embedding || embedding.length === 0) {
+    return [];
+  }
+
   const db = await getDb();
   const collection = db.collection<Decision>("decisions");
 
@@ -22,7 +26,7 @@ export async function findSimilarDecisions(
         index: "vector_index",
         path: "embedding",
         queryVector: embedding,
-        numCandidates: limit * 10,
+        numCandidates: Math.max(limit * 10, 100),
         limit: limit,
       },
     },
@@ -34,5 +38,5 @@ export async function findSimilarDecisions(
   ];
 
   const results = await collection.aggregate<SimilarDecision>(pipeline).toArray();
-  return results;
+  return results || [];
 }

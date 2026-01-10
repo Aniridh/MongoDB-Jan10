@@ -95,6 +95,7 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
         { role: "user", content: userPrompt },
       ],
       temperature: 0.7,
+      max_tokens: 2000,
       response_format: { type: "json_object" },
     }),
   });
@@ -106,19 +107,30 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
 
   const data = await response.json();
   if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
-    throw new Error("Invalid response from LLM API");
+    throw new Error("Invalid response from LLM API: missing choices array");
   }
 
   const content = data.choices[0].message?.content;
-  if (!content) {
-    throw new Error("No content in LLM API response");
+  if (!content || typeof content !== "string" || content.trim().length === 0) {
+    throw new Error("No content in LLM API response or content is empty");
   }
 
-  try {
-    return JSON.parse(content);
-  } catch (error) {
-    throw new Error(`Failed to parse LLM response as JSON: ${error}`);
+  if (content.length > 10000) {
+    throw new Error(`LLM response too long (${content.length} chars). Maximum allowed: 10000`);
   }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    throw new Error(`Failed to parse LLM response as JSON: ${error}. Raw content: ${content.substring(0, 200)}`);
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("LLM response parsed to non-object value");
+  }
+
+  return parsed;
 }
 
 /**
@@ -150,8 +162,19 @@ export async function runAgents(
   // 4. Historian Agent
   const historianOutput = await callAgent("historian", inputs);
 
-  if (!historianOutput.decisionSummary || !historianOutput.decisionRationale) {
-    throw new Error("Historian agent output must contain decisionSummary and decisionRationale");
+  if (!historianOutput || typeof historianOutput !== "object") {
+    throw new Error("Historian agent returned invalid output: not an object");
+  }
+
+  const decisionSummary = historianOutput.decisionSummary;
+  const decisionRationale = historianOutput.decisionRationale;
+
+  if (!decisionSummary || typeof decisionSummary !== "string" || decisionSummary.trim().length === 0) {
+    throw new Error("Historian agent output must contain decisionSummary as a non-empty string");
+  }
+
+  if (!decisionRationale || typeof decisionRationale !== "string" || decisionRationale.trim().length === 0) {
+    throw new Error("Historian agent output must contain decisionRationale as a non-empty string");
   }
 
   return {
@@ -159,8 +182,8 @@ export async function runAgents(
     review: reviewOutput,
     tradeoff: tradeoffOutput,
     historian: {
-      decisionSummary: historianOutput.decisionSummary,
-      decisionRationale: historianOutput.decisionRationale,
+      decisionSummary: decisionSummary.trim(),
+      decisionRationale: decisionRationale.trim(),
     },
   };
 }

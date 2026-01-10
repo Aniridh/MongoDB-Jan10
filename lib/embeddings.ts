@@ -27,8 +27,13 @@ export async function embedText(text: string): Promise<number[]> {
 
   const data = await response.json();
   if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
-    throw new Error("Invalid response from Voyage AI API");
+    throw new Error("Invalid response from Voyage AI API: missing embedding data");
   }
 
-  return data.data[0].embedding;
+  const embedding = data.data[0].embedding;
+  if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
+    throw new Error("Invalid embedding returned from Voyage AI API");
+  }
+
+  return embedding;
 }
