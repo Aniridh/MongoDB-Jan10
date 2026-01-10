@@ -109,8 +109,8 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
           },
         ],
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2000,
+          temperature: 0.2,
+          maxOutputTokens: 2048,
           responseMimeType: "application/json",
         },
       }),
@@ -140,18 +140,20 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
       throw new Error(`Gemini response too long (${content.length} chars). Maximum allowed: 10000`);
     }
 
-    let parsed: any;
-    try {
-      parsed = JSON.parse(content);
-    } catch (error) {
-      throw new Error(`Failed to parse Gemini response as JSON: ${error}. Raw content: ${content.substring(0, 200)}`);
-    }
+    // let parsed: any;
+    // try {
+    //   parsed = JSON.parse(content);
+    // } catch (error) {
+    //   throw new Error(`Failed to parse Gemini response as JSON: ${error}. Raw content: ${content.substring(0, 200)}`);
+    // }
 
-    if (!parsed || typeof parsed !== "object") {
-      throw new Error("Gemini response parsed to non-object value");
-    }
+    // if (!parsed || typeof parsed !== "object") {
+    //   throw new Error("Gemini response parsed to non-object value");
+    // }
 
-    return parsed;
+    // return parsed;
+    return content.trim();
+
   } else {
     // OpenAI-compatible API structure (for OpenAI, Anthropic via proxy, or OpenAI-compatible Gemini services)
     response = await fetch(`${apiBaseUrl}/chat/completions`, {
@@ -233,11 +235,21 @@ export async function runAgents(
   inputs.tradeoffOutput = tradeoffOutput;
 
   // 4. Historian Agent
-  const historianOutput = await callAgent("historian", inputs);
+  // const historianOutput = await callAgent("historian", inputs);
 
-  if (!historianOutput || typeof historianOutput !== "object") {
-    throw new Error("Historian agent returned invalid output: not an object");
-  }
+  // if (!historianOutput || typeof historianOutput !== "object") {
+  //   throw new Error("Historian agent returned invalid output: not an object");
+  // }
+  let historianOutput = await callAgent("historian", inputs);
+
+// If the agent returns plain text, wrap it
+if (typeof historianOutput === "string") {
+  historianOutput = {
+    decisionSummary: historianOutput.trim(),
+    decisionRationale: historianOutput.trim(),
+  };
+}
+
 
   const decisionSummary = historianOutput.decisionSummary;
   const decisionRationale = historianOutput.decisionRationale;
