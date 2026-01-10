@@ -96,11 +96,12 @@ export async function POST(request: NextRequest) {
 
     let similarDecisions: SimilarDecision[] = [];
     let orchestrationResult: OrchestrationResult | null = null;
+    let initialEmbedding: number[] = [];
 
     try {
       // Generate initial embedding from artifact content + tool report for vector search
       const textToEmbed = `${artifactContent}\n\n${toolReport}`;
-      const initialEmbedding = await embedText(textToEmbed);
+      initialEmbedding = await embedText(textToEmbed);
 
       // Find similar decisions (handle empty results gracefully)
       try {
@@ -155,19 +156,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 7. Generate embedding from rationale and persist decision
+    // 7. Persist decision with embedding from artifact+report (same as search query)
     const decisionSummary = orchestrationResult.historian.decisionSummary;
     const decisionRationale = orchestrationResult.historian.decisionRationale;
 
-    let rationaleEmbedding: number[];
-    try {
-      rationaleEmbedding = await embedText(decisionRationale);
-    } catch (error) {
-      console.error("Failed to generate embedding from rationale:", error);
+    // Use the same embedding we searched with (artifact+report) for consistency
+    // This ensures similar artifacts find similar past decisions
+    if (initialEmbedding.length === 0) {
       return NextResponse.json(
-        {
-          error: "Failed to generate decision embedding",
-        },
+        { error: "Failed to generate embedding for decision storage" },
         { status: 500 }
       );
     }
@@ -179,7 +176,7 @@ export async function POST(request: NextRequest) {
       artifactId,
       summary: decisionSummary,
       rationale: decisionRationale,
-      embedding: rationaleEmbedding,
+      embedding: initialEmbedding,
       agentRolesInvolved,
       createdAt: now,
     };
@@ -200,10 +197,9 @@ export async function POST(request: NextRequest) {
       })),
       decisions: [
         {
+          _id: decision._id || "",
           summary: decision.summary,
           rationale: decision.rationale,
-          embedding: decision.embedding,
-          agentRolesInvolved: decision.agentRolesInvolved,
           createdAt: decision.createdAt.toISOString(),
         },
       ],
