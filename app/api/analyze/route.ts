@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
       })),
       decisions: [
         {
-          _id: decision._id || "",
+          _id: decision._id!,
           summary: decision.summary,
           rationale: decision.rationale,
           createdAt: decision.createdAt.toISOString(),
