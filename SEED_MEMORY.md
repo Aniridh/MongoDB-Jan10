@@ -4,6 +4,11 @@
 
 Seed the "shared brain" (vector search memory) with similar artifacts so the Historian agent can reference previous decisions.
 
+**⚠️ Prerequisites:**
+- Server must be running (`npm run dev` or deployed URL)
+- All environment variables set (see `ENV_INDEX_CHECK.md`)
+- MongoDB Atlas vector index configured (see `ENV_INDEX_CHECK.md`)
+
 ## How It Works
 
 1. **Run 1**: Submit a buggy artifact (e.g., missing tests, janky logic)
@@ -22,11 +27,12 @@ npx tsx scripts/seed-memory.ts
 ```
 
 This will:
-- Run both artifacts automatically
-- Wait for indexing
-- Analyze the historian rationale
-- Verify MongoDB collections
-- Check if vector search is working
+- Call `/api/analyze` at least twice with related artifacts
+- Populate decisions collection so Vector Search has data to retrieve
+- Wait for MongoDB vector index to update (3 seconds)
+- Verify that decisions were created in MongoDB
+- Analyze the historian rationale to check if previous decisions are referenced
+- Log errors clearly if any step fails (won't crash on single failure)
 
 ### Option 2: Quick Seed Script
 

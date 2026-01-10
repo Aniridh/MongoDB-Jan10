@@ -8,10 +8,10 @@ Verify these are set in your **production/hackathon environment** (NOT just `.en
 - ✅ `MONGODB_URI` - MongoDB Atlas connection string
 - ✅ `MONGODB_DB_NAME` - Database name (defaults to `visibl` if not set)
 
-### LLM API
-- ✅ `LLM_API_KEY` - API key for LLM provider
-- ✅ `LLM_API_BASE_URL` - Base URL for LLM API (e.g., `https://api.openai.com/v1`)
-- ✅ `LLM_MODEL` - Model name (e.g., `gpt-4`, `gpt-3.5-turbo`)
+### LLM API (Gemini)
+- ✅ `LLM_API_KEY` - Gemini API key (Google AI Studio API key)
+- ✅ `LLM_API_BASE_URL` - Gemini API base URL (e.g., `https://generativelanguage.googleapis.com/v1beta` or OpenAI-compatible service URL)
+- ✅ `LLM_MODEL` - Gemini model name (e.g., `gemini-pro`, `gemini-1.5-pro`)
 
 ### Embeddings
 - ✅ `VOYAGE_API_KEY` - Voyage AI API key for embeddings

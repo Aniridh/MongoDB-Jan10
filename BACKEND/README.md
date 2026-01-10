@@ -61,16 +61,31 @@ All backend code lives in two locations (Next.js conventions):
 
 ---
 
-## Environment Variables Required (Backend)
+## Environment Setup
 
-These are set in `.env.local` (not tracked in git):
+### Required Environment Variables
 
-- `VOYAGE_API_KEY` - Voyage AI embeddings
-- `LLM_API_KEY` - LLM API key
-- `LLM_API_BASE_URL` - LLM API base URL
-- `LLM_MODEL` - LLM model name
-- `MONGODB_URI` - MongoDB connection string
-- `MONGODB_DB_NAME` - Database name (default: "visibl")
+All 6 environment variables must be set in **both**:
+- **Local development:** `.env.local` (copy from `.env.example` and fill in your values)
+- **Deployment/hackathon:** Platform environment variable settings (Vercel, Railway, etc.)
+
+See `.env.example` at the repo root for a template with all required variables (Gemini API examples included):
+
+- `MONGODB_URI` - MongoDB Atlas connection string
+- `MONGODB_DB_NAME` - Database name (set to "visibl" in example)
+- `LLM_API_KEY` - Gemini API key (Google AI Studio API key)
+- `LLM_API_BASE_URL` - Gemini API base URL (e.g., https://generativelanguage.googleapis.com/v1beta or OpenAI-compatible service URL)
+- `LLM_MODEL` - Gemini model name (e.g., gemini-pro, gemini-1.5-pro)
+- `VOYAGE_API_KEY` - Voyage AI API key for embeddings
+
+**Important:**
+- `.env.local` is ignored by git (see `.gitignore`)
+- Never commit real API keys or secrets
+- The API contract must not change (see contract with frontend below)
+
+### Verification
+
+Run `./scripts/verify-env.sh` to check all environment variables are set correctly.
 
 ---
 
@@ -81,3 +96,18 @@ See `/FRONTEND_CONTRACT.md` for API contract details.
 **Endpoint:** `POST /api/analyze`  
 **Body:** `{ artifactContent: string }`  
 **Response:** See `FRONTEND_CONTRACT.md` for full shape
+
+---
+
+## API Stability
+
+**⚠️ BACKEND FREEZE NOTE:**
+
+The `/api/analyze` request and response shapes are **FROZEN** for the hackathon.
+
+- Frontend integration depends on this stability
+- Only bug fixes are allowed - no breaking contract changes
+- Do not modify request/response shapes without frontend team approval
+- See `API_CONTRACT.md` and `FRONTEND_CONTRACT.md` for exact contract specifications
+
+**This API contract is stable and will not change during development.**

@@ -82,55 +82,128 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
       break;
   }
 
-  const response = await fetch(`${apiBaseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-      response_format: { type: "json_object" },
-    }),
-  });
+  // Detect if using Gemini native API (vs OpenAI-compatible service)
+  const isGeminiNative = apiBaseUrl.includes("generativelanguage.googleapis.com") || model.toLowerCase().startsWith("gemini");
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`LLM API error: ${response.status} - ${errorText}`);
+  let response: Response;
+  let data: any;
+
+  if (isGeminiNative) {
+    // Gemini native API structure
+    const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+    const url = `${apiBaseUrl}/models/${model}:generateContent?key=${apiKey}`;
+    
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: fullPrompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2000,
+          responseMimeType: "application/json",
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+    }
+
+    data = await response.json();
+    if (!data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+      throw new Error("Invalid response from Gemini API: missing candidates array");
+    }
+
+    const candidate = data.candidates[0];
+    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+      throw new Error("Invalid response from Gemini API: missing content parts");
+    }
+
+    const content = candidate.content.parts[0].text;
+    if (!content || typeof content !== "string" || content.trim().length === 0) {
+      throw new Error("No content in Gemini API response or content is empty");
+    }
+
+    if (content.length > 10000) {
+      throw new Error(`Gemini response too long (${content.length} chars). Maximum allowed: 10000`);
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(content);
+    } catch (error) {
+      throw new Error(`Failed to parse Gemini response as JSON: ${error}. Raw content: ${content.substring(0, 200)}`);
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("Gemini response parsed to non-object value");
+    }
+
+    return parsed;
+  } else {
+    // OpenAI-compatible API structure (for OpenAI, Anthropic via proxy, or OpenAI-compatible Gemini services)
+    response = await fetch(`${apiBaseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`LLM API error: ${response.status} - ${errorText}`);
+    }
+
+    data = await response.json();
+    if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+      throw new Error("Invalid response from LLM API: missing choices array");
+    }
+
+    const content = data.choices[0].message?.content;
+    if (!content || typeof content !== "string" || content.trim().length === 0) {
+      throw new Error("No content in LLM API response or content is empty");
+    }
+
+    if (content.length > 10000) {
+      throw new Error(`LLM response too long (${content.length} chars). Maximum allowed: 10000`);
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(content);
+    } catch (error) {
+      throw new Error(`Failed to parse LLM response as JSON: ${error}. Raw content: ${content.substring(0, 200)}`);
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("LLM response parsed to non-object value");
+    }
+
+    return parsed;
   }
-
-  const data = await response.json();
-  if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
-    throw new Error("Invalid response from LLM API: missing choices array");
-  }
-
-  const content = data.choices[0].message?.content;
-  if (!content || typeof content !== "string" || content.trim().length === 0) {
-    throw new Error("No content in LLM API response or content is empty");
-  }
-
-  if (content.length > 10000) {
-    throw new Error(`LLM response too long (${content.length} chars). Maximum allowed: 10000`);
-  }
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(content);
-  } catch (error) {
-    throw new Error(`Failed to parse LLM response as JSON: ${error}. Raw content: ${content.substring(0, 200)}`);
-  }
-
-  if (!parsed || typeof parsed !== "object") {
-    throw new Error("LLM response parsed to non-object value");
-  }
-
-  return parsed;
 }
 
 /**

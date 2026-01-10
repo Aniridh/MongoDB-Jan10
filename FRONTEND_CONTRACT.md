@@ -2,37 +2,42 @@
 
 ## Endpoint: `POST /api/analyze`
 
-### Request Body
+### Body
 ```typescript
 {
-  artifactContent: string;
+  "artifactContent": "string"
 }
 ```
 
-### Response Shape (simplified)
+### Response
 ```typescript
 {
   toolReport: string;
-  agentMessages: Array<{
+  agentMessages: {
     agentRole: "analysis" | "review" | "tradeoff" | "historian";
     message: string;
-    createdAt: string;
-  }>;
-  decisions: Array<{
+  }[];
+  decisions: {
     _id: string;
     summary: string;
     rationale: string;
     createdAt: string;
-  }>;
+  }[];
 }
 ```
 
 ---
 
-## UI Panel Mapping
+## Mapping to UI Panels
 
 **Tool Output panel** → `toolReport`
 
-**Agent Dialogue panel** → `agentMessages`
+**Agent Dialogue** → `agentMessages` (in the order returned)
 
-**Decision History panel** → `decisions` (sorted by `createdAt` descending)
+**Decision History** → `decisions` sorted newest first
+
+---
+
+## API Stability
+
+**Do not change this API. I'll keep it stable. You just render it.**

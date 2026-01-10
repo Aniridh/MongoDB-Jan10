@@ -191,4 +191,17 @@ interface AnalyzeError {
 
 ---
 
+---
+
+## API Stability
+
+**⚠️ BACKEND FREEZE:**
+
+The `/api/analyze` request and response shapes are **FROZEN** for the hackathon.
+
+- Frontend integration depends on this stability
+- Only bug fixes allowed - no breaking contract changes
+- Do not modify request/response shapes without backend approval
+- This contract is stable and will not change during development
+
 **End of Contract**

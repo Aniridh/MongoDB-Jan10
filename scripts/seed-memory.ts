@@ -51,10 +51,9 @@ interface AnalyzeResponse {
     createdAt: string;
   }>;
   decisions: Array<{
+    _id: string;
     summary: string;
     rationale: string;
-    embedding: number[];
-    agentRolesInvolved: string[];
     createdAt: string;
   }>;
 }
@@ -86,15 +85,33 @@ async function seedMemory() {
     console.log("Artifact preview:");
     console.log(BUGGY_ARTIFACT.substring(0, 100) + "...\n");
 
-    const run1Response = await analyzeArtifact(BUGGY_ARTIFACT);
+    let run1Response: AnalyzeResponse;
+    try {
+      run1Response = await analyzeArtifact(BUGGY_ARTIFACT);
+    } catch (error) {
+      console.error("❌ Run 1 failed:", error instanceof Error ? error.message : error);
+      console.error("");
+      if (error instanceof Error && error.message.includes("fetch")) {
+        console.error("💡 Make sure the server is running:");
+        console.error("   npm run dev");
+        console.error("");
+      }
+      throw error;
+    }
     
     console.log("✅ Run 1 completed");
-    console.log(`   toolReport: ${run1Response.toolReport.length} chars`);
-    console.log(`   agentMessages: ${run1Response.agentMessages.length}`);
-    console.log(`   decisions: ${run1Response.decisions.length}`);
+    console.log(`   toolReport: ${run1Response.toolReport?.length || 0} chars`);
+    console.log(`   agentMessages: ${run1Response.agentMessages?.length || 0}`);
+    console.log(`   decisions: ${run1Response.decisions?.length || 0}`);
+    
+    if (!run1Response.decisions || run1Response.decisions.length === 0) {
+      console.error("❌ Run 1: No decisions created - cannot proceed with Run 2");
+      process.exit(1);
+    }
     
     if (run1Response.decisions.length > 0) {
-      console.log(`   First decision summary: "${run1Response.decisions[0].summary.substring(0, 80)}..."`);
+      console.log(`   First decision summary: "${run1Response.decisions[0].summary?.substring(0, 80) || "N/A"}..."`);
+      console.log(`   First decision ID: ${run1Response.decisions[0]._id || "N/A"}`);
     }
     console.log("");
 
@@ -109,12 +126,28 @@ async function seedMemory() {
     console.log(MODIFIED_ARTIFACT.substring(0, 100) + "...\n");
     console.log("Changes: Added validation, included quantity, minor improvements\n");
 
-    const run2Response = await analyzeArtifact(MODIFIED_ARTIFACT);
+    let run2Response: AnalyzeResponse;
+    try {
+      run2Response = await analyzeArtifact(MODIFIED_ARTIFACT);
+    } catch (error) {
+      console.error("❌ Run 2 failed:", error instanceof Error ? error.message : error);
+      console.error("");
+      console.error("Note: Run 1 succeeded and created decision, but Run 2 failed.");
+      console.error("Check server logs for details.");
+      console.error("");
+      throw error;
+    }
     
     console.log("✅ Run 2 completed");
-    console.log(`   toolReport: ${run2Response.toolReport.length} chars`);
-    console.log(`   agentMessages: ${run2Response.agentMessages.length}`);
-    console.log(`   decisions: ${run2Response.decisions.length}`);
+    console.log(`   toolReport: ${run2Response.toolReport?.length || 0} chars`);
+    console.log(`   agentMessages: ${run2Response.agentMessages?.length || 0}`);
+    console.log(`   decisions: ${run2Response.decisions?.length || 0}`);
+    
+    if (!run2Response.decisions || run2Response.decisions.length === 0) {
+      console.error("❌ Run 2: No decisions created - cannot verify memory recall");
+      process.exit(1);
+    }
+    
     console.log("");
 
     // Verify decisions count
