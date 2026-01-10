@@ -37,6 +37,14 @@ export async function findSimilarDecisions(
     },
   ];
 
-  const results = await collection.aggregate<SimilarDecision>(pipeline).toArray();
-  return results || [];
+  try {
+    const results = await collection.aggregate<SimilarDecision>(pipeline).toArray();
+    return results || [];
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (errorMsg.includes("index") || errorMsg.includes("vector") || errorMsg.includes("$vectorSearch")) {
+      throw new Error(`Vector search index error: ${errorMsg}. Make sure the 'vector_index' exists on the 'decisions' collection with field path 'embedding'.`);
+    }
+    throw error;
+  }
 }

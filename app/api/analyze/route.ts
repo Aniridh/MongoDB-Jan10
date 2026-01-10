@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { createFakeReport } from "@/lib/fakeReport";
-import { embedText, findSimilarDecisions, runAgents } from "@/lib/agentB";
+import {
+  embedText,
+  findSimilarDecisions,
+  runAgents,
+  type SimilarDecision,
+  type OrchestrationResult,
+} from "@/lib/agentB";
 import type {
   Artifact,
   Report,
@@ -40,11 +46,12 @@ export async function POST(request: NextRequest) {
 
     const now = new Date();
     let artifactId: string;
+    let artifactCreatedAt: Date;
 
     if (existingArtifact) {
       // Update existing artifact
-      // MongoDB returns _id as ObjectId, convert to string
       artifactId = (existingArtifact._id as any).toString();
+      artifactCreatedAt = existingArtifact.createdAt;
       await artifactsCollection.updateOne(
         { _id: existingArtifact._id },
         { $set: { updatedAt: now } }
@@ -58,6 +65,7 @@ export async function POST(request: NextRequest) {
       };
       const result = await artifactsCollection.insertOne(newArtifact);
       artifactId = result.insertedId.toString();
+      artifactCreatedAt = now;
     }
 
     // 3. Generate fake tool report
@@ -74,41 +82,70 @@ export async function POST(request: NextRequest) {
     const reportId = reportResult.insertedId.toString();
 
     // 5. Call Agent B's utilities
-    let embedding: number[];
-    let similarDecisions: Array<{ decision: any; similarity: number }> = [];
-    let agentResults: Array<{
-      agentRole: "analysis" | "review" | "tradeoff" | "historian";
-      message: string;
-    }> = [];
+    const artifact: Artifact = {
+      content: artifactContent,
+      createdAt: artifactCreatedAt,
+      updatedAt: now,
+    };
+
+    const report: Report = {
+      artifactId,
+      rawReport: toolReport,
+      createdAt: now,
+    };
+
+    let similarDecisions: SimilarDecision[] = [];
+    let orchestrationResult: OrchestrationResult | null = null;
 
     try {
-      // Generate embedding from artifact content + tool report
+      // Generate initial embedding from artifact content + tool report for vector search
       const textToEmbed = `${artifactContent}\n\n${toolReport}`;
-      embedding = await embedText(textToEmbed);
+      const initialEmbedding = await embedText(textToEmbed);
 
-      // Find similar decisions
-      similarDecisions = await findSimilarDecisions(embedding);
+      // Find similar decisions (handle empty results gracefully)
+      try {
+        similarDecisions = await findSimilarDecisions(initialEmbedding);
+      } catch (error) {
+        // Vector search may fail if no index exists or no results - continue with empty array
+        similarDecisions = [];
+      }
 
       // Run agents
-      agentResults = await runAgents(artifactContent, toolReport, similarDecisions);
+      orchestrationResult = await runAgents(artifact, report, similarDecisions);
     } catch (error) {
-      // If Agent B utilities are not implemented yet, use empty defaults
-      console.error("Agent B utilities not available:", error);
-      embedding = [];
-      similarDecisions = [];
-      agentResults = [];
+      console.error("Agent B utilities error:", error);
+      return NextResponse.json(
+        {
+          error: error instanceof Error ? error.message : "Agent orchestration failed",
+        },
+        { status: 500 }
+      );
     }
 
-    // 6. Persist agent messages
+    if (!orchestrationResult) {
+      return NextResponse.json(
+        { error: "Agent orchestration returned no result" },
+        { status: 500 }
+      );
+    }
+
+    // 6. Persist agent messages in execution order
     const agentMessagesCollection = db.collection<AgentMessage>("agent_messages");
     const agentMessages: AgentMessage[] = [];
 
-    for (const result of agentResults) {
+    const agentOutputs = [
+      { role: "analysis" as const, output: orchestrationResult.analysis },
+      { role: "review" as const, output: orchestrationResult.review },
+      { role: "tradeoff" as const, output: orchestrationResult.tradeoff },
+      { role: "historian" as const, output: orchestrationResult.historian },
+    ];
+
+    for (const agentOutput of agentOutputs) {
       const agentMessage: Omit<AgentMessage, "_id"> = {
         artifactId,
         reportId,
-        agentRole: result.agentRole,
-        message: result.message,
+        agentRole: agentOutput.role,
+        message: JSON.stringify(agentOutput.output, null, 2),
         createdAt: now,
       };
       const msgResult = await agentMessagesCollection.insertOne(agentMessage);
@@ -118,27 +155,35 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 7. Persist new decision
+    // 7. Generate embedding from rationale and persist decision
+    const decisionSummary = orchestrationResult.historian.decisionSummary;
+    const decisionRationale = orchestrationResult.historian.decisionRationale;
+
+    let rationaleEmbedding: number[];
+    try {
+      rationaleEmbedding = await embedText(decisionRationale);
+    } catch (error) {
+      console.error("Failed to generate embedding from rationale:", error);
+      return NextResponse.json(
+        {
+          error: "Failed to generate decision embedding",
+        },
+        { status: 500 }
+      );
+    }
+
     const decisionsCollection = db.collection<Decision>("decisions");
-    const agentRolesInvolved = agentResults.map((r) => r.agentRole);
-    
-    const decisionSummary = agentResults.length > 0
-      ? agentResults.map((r) => `${r.agentRole}: ${r.message.slice(0, 100)}`).join(" | ")
-      : "No agent analysis available";
-    
-    const decisionRationale = agentResults.length > 0
-      ? agentResults.map((r) => r.message).join("\n\n")
-      : "Waiting for agent implementation";
+    const agentRolesInvolved = ["analysis", "review", "tradeoff", "historian"];
 
     const newDecision: Omit<Decision, "_id"> = {
       artifactId,
       summary: decisionSummary,
       rationale: decisionRationale,
-      embedding,
+      embedding: rationaleEmbedding,
       agentRolesInvolved,
       createdAt: now,
     };
-    
+
     const decisionResult = await decisionsCollection.insertOne(newDecision);
     const decision: Decision = {
       _id: decisionResult.insertedId.toString(),
@@ -153,12 +198,15 @@ export async function POST(request: NextRequest) {
         message: msg.message,
         createdAt: msg.createdAt.toISOString(),
       })),
-      decisions: [{
-        summary: decision.summary,
-        rationale: decision.rationale,
-        agentRolesInvolved: decision.agentRolesInvolved,
-        createdAt: decision.createdAt.toISOString(),
-      }],
+      decisions: [
+        {
+          summary: decision.summary,
+          rationale: decision.rationale,
+          embedding: decision.embedding,
+          agentRolesInvolved: decision.agentRolesInvolved,
+          createdAt: decision.createdAt.toISOString(),
+        },
+      ],
     });
   } catch (error) {
     console.error("Error in /api/analyze:", error);
