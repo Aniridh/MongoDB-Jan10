@@ -58,6 +58,110 @@ function formatTimestamp(timestamp: string): string {
   });
 }
 
+function formatAgentMessage(message: string, role: AgentRole): string {
+  // Try to parse as JSON
+  try {
+    const parsed = JSON.parse(message);
+    
+    // If it's already a string, return it
+    if (typeof parsed === 'string') {
+      return parsed;
+    }
+    
+    // Handle different agent roles
+    if (role === 'historian') {
+      // Historian has decisionSummary and decisionRationale
+      if (parsed.decisionSummary && parsed.decisionRationale) {
+        return `${parsed.decisionSummary}\n\n${parsed.decisionRationale}`;
+      }
+      if (parsed.decisionSummary) return parsed.decisionSummary;
+      if (parsed.decisionRationale) return parsed.decisionRationale;
+    }
+    
+    // For other agents, extract meaningful fields
+    // Common patterns: insights, analysis, review, challenges, tradeoffs, etc.
+    const textFields: string[] = [];
+    
+    if (parsed.insights) textFields.push(parsed.insights);
+    if (parsed.analysis) textFields.push(parsed.analysis);
+    if (parsed.summary) textFields.push(parsed.summary);
+    if (parsed.review) textFields.push(parsed.review);
+    if (parsed.challenges) textFields.push(parsed.challenges);
+    if (parsed.tradeoffs) textFields.push(parsed.tradeoffs);
+    if (parsed.tradeOffs) textFields.push(parsed.tradeOffs);
+    if (parsed.tensions) textFields.push(parsed.tensions);
+    if (parsed.recommendations) textFields.push(parsed.recommendations);
+    if (parsed.conclusion) textFields.push(parsed.conclusion);
+    if (parsed.keyPoints) {
+      const points = Array.isArray(parsed.keyPoints) 
+        ? parsed.keyPoints.join('\n• ') 
+        : parsed.keyPoints;
+      textFields.push(`• ${points}`);
+    }
+    if (parsed.findings) {
+      const findings = Array.isArray(parsed.findings)
+        ? parsed.findings.join('\n• ')
+        : parsed.findings;
+      textFields.push(`• ${findings}`);
+    }
+    
+    // If we found text fields, join them
+    if (textFields.length > 0) {
+      return textFields.join('\n\n');
+    }
+    
+    // If no common fields, try to extract any string values
+    const stringValues: string[] = [];
+    const skipKeys = ['id', 'type', '_id', 'role', 'agentRole', 'createdAt', 'updatedAt'];
+    
+    for (const [key, value] of Object.entries(parsed)) {
+      const lowerKey = key.toLowerCase();
+      // Skip technical/metadata fields
+      if (skipKeys.some(skip => lowerKey.includes(skip))) continue;
+      
+      if (typeof value === 'string' && value.trim().length > 0) {
+        // Include meaningful text (longer strings or important fields)
+        if (value.length > 15 || ['summary', 'rationale', 'description', 'content', 'text', 'message'].some(f => lowerKey.includes(f))) {
+          stringValues.push(value);
+        }
+      } else if (Array.isArray(value) && value.length > 0) {
+        // Handle arrays of strings or objects with text
+        const arrayStrings = value
+          .map(v => {
+            if (typeof v === 'string' && v.trim().length > 0) {
+              return `• ${v}`;
+            } else if (typeof v === 'object' && v !== null) {
+              // Try to extract text from objects in array
+              const objText = Object.values(v).filter(val => typeof val === 'string' && val.length > 10).join(' ');
+              return objText ? `• ${objText}` : null;
+            }
+            return null;
+          })
+          .filter(Boolean)
+          .join('\n');
+        if (arrayStrings) stringValues.push(arrayStrings);
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        // Recursively extract text from nested objects
+        const nestedText = Object.entries(value)
+          .filter(([k, v]) => typeof v === 'string' && v.length > 10 && !skipKeys.some(skip => k.toLowerCase().includes(skip)))
+          .map(([k, v]) => `${k}: ${v}`)
+          .join('\n');
+        if (nestedText) stringValues.push(nestedText);
+      }
+    }
+    
+    if (stringValues.length > 0) {
+      return stringValues.join('\n\n');
+    }
+    
+    // Fallback: return formatted JSON (better than raw string)
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    // If not JSON, return as-is
+    return message;
+  }
+}
+
 export default function Home() {
   const [artifactContent, setArtifactContent] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -196,7 +300,9 @@ export default function Home() {
                         {formatTimestamp(msg.createdAt)}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-700 leading-relaxed pl-4">{msg.message}</p>
+                    <div className="text-sm text-gray-700 leading-relaxed pl-4 whitespace-pre-wrap">
+                      {formatAgentMessage(msg.message, msg.agentRole)}
+                    </div>
                   </div>
                 ))
               ) : (

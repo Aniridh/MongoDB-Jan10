@@ -38,6 +38,23 @@ export interface OrchestrationResult {
 /**
  * Call a single agent with the given role and inputs
  */
+function extractJsonObject(text: string): string | null {
+  if (!text) return null;
+
+  // 1) ```json ... ```
+  const fenced = text.match(/```json\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) return fenced[1].trim();
+
+  // 2) First { ... last }
+  const first = text.indexOf("{");
+  const last = text.lastIndexOf("}");
+  if (first !== -1 && last !== -1 && last > first) {
+    return text.slice(first, last + 1).trim();
+  }
+
+  return null;
+}
+
 async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian", inputs: AgentInputs): Promise<any> {
   const apiKey = process.env.LLM_API_KEY;
   const apiBaseUrl = process.env.LLM_API_BASE_URL;
@@ -195,9 +212,12 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
 
     let parsed: any;
     try {
-      parsed = JSON.parse(content);
+      const jsonText = extractJsonObject(content);
+      if (!jsonText) throw new Error("No JSON object found in model output");
+      parsed = JSON.parse(jsonText);
+
     } catch (error) {
-      throw new Error(`Failed to parse LLM response as JSON: ${error}. Raw content: ${content.substring(0, 200)}`);
+      return { rawText: content };
     }
 
     if (!parsed || typeof parsed !== "object") {
