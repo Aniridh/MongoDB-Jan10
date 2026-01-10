@@ -18,7 +18,7 @@ import type {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { artifactContent } = body;
+    let { artifactContent } = body;
 
     // 1. Validate artifactContent
     if (!artifactContent || typeof artifactContent !== "string") {
@@ -31,6 +31,35 @@ export async function POST(request: NextRequest) {
     if (artifactContent.trim().length === 0) {
       return NextResponse.json(
         { error: "artifactContent cannot be empty" },
+        { status: 400 }
+      );
+    }
+
+    // Parse VISIBL_GOAL and VISIBL_FOLLOWUP from artifact content
+    let goal: string | null = null;
+    let followup: string | null = null;
+    let cleanArtifactContent = artifactContent;
+
+    // Extract VISIBL_GOAL
+    const goalMatch = artifactContent.match(/\[VISIBL_GOAL=([^\]]+)\]/);
+    if (goalMatch) {
+      goal = goalMatch[1];
+      cleanArtifactContent = cleanArtifactContent.replace(/\[VISIBL_GOAL=[^\]]+\]\n?/, '');
+    }
+
+    // Extract VISIBL_FOLLOWUP
+    const followupMatch = artifactContent.match(/\[VISIBL_FOLLOWUP=([^\]]+)\]/);
+    if (followupMatch) {
+      followup = followupMatch[1];
+      cleanArtifactContent = cleanArtifactContent.replace(/\[VISIBL_FOLLOWUP=[^\]]+\]\n?/, '');
+    }
+
+    // Use clean content for storage and processing
+    artifactContent = cleanArtifactContent.trim();
+
+    if (artifactContent.length === 0) {
+      return NextResponse.json(
+        { error: "artifactContent cannot be empty after parsing" },
         { status: 400 }
       );
     }
@@ -68,8 +97,8 @@ export async function POST(request: NextRequest) {
       artifactCreatedAt = now;
     }
 
-    // 3. Generate fake tool report
-    const toolReport = createFakeReport(artifactContent);
+    // 3. Generate fake tool report (goal-aware)
+    const toolReport = createFakeReport(artifactContent, goal);
 
     // 4. Save report
     const reportsCollection = db.collection<Report>("reports");
@@ -111,8 +140,8 @@ export async function POST(request: NextRequest) {
         similarDecisions = [];
       }
 
-      // Run agents
-      orchestrationResult = await runAgents(artifact, report, similarDecisions);
+      // Run agents (goal-aware)
+      orchestrationResult = await runAgents(artifact, report, similarDecisions, goal, followup);
     } catch (error) {
       console.error("Agent B utilities error:", error);
       return NextResponse.json(
@@ -142,11 +171,22 @@ export async function POST(request: NextRequest) {
     ];
 
     for (const agentOutput of agentOutputs) {
+      // Store plain text directly (agents now return strings instead of JSON objects)
+      let messageText: string;
+      if (typeof agentOutput.output === "string") {
+        messageText = agentOutput.output;
+      } else if (agentOutput.output && typeof agentOutput.output === "object") {
+        // For historian, it's still an object with decisionSummary and decisionRationale
+        messageText = JSON.stringify(agentOutput.output, null, 2);
+      } else {
+        messageText = String(agentOutput.output);
+      }
+
       const agentMessage: Omit<AgentMessage, "_id"> = {
         artifactId,
         reportId,
         agentRole: agentOutput.role,
-        message: JSON.stringify(agentOutput.output, null, 2),
+        message: messageText,
         createdAt: now,
       };
       const msgResult = await agentMessagesCollection.insertOne(agentMessage);

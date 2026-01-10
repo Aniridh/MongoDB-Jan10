@@ -15,6 +15,8 @@ export interface AgentInputs {
   artifact: Artifact;
   report: Report;
   similarDecisions: SimilarDecision[];
+  goal?: string | null;
+  followup?: string | null;
   analysisOutput?: any;
   reviewOutput?: any;
   tradeoffOutput?: any;
@@ -75,17 +77,17 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
 
   switch (role) {
     case "analysis":
-      systemPrompt = getAnalysisAgentPrompt();
+      systemPrompt = getAnalysisAgentPrompt(inputs.goal, inputs.followup);
       userPrompt = `Analyze the following artifact and report:\n\nArtifact:\n${inputs.artifact.content}\n\nReport:\n${inputs.report.rawReport}`;
       break;
 
     case "review":
-      systemPrompt = getReviewAgentPrompt();
+      systemPrompt = getReviewAgentPrompt(inputs.goal, inputs.followup);
       userPrompt = `Review the following analysis output:\n\n${JSON.stringify(inputs.analysisOutput, null, 2)}`;
       break;
 
     case "tradeoff":
-      systemPrompt = getTradeoffAgentPrompt();
+      systemPrompt = getTradeoffAgentPrompt(inputs.goal, inputs.followup);
       userPrompt = `Evaluate trade-offs based on the following:\n\nAnalysis:\n${JSON.stringify(inputs.analysisOutput, null, 2)}\n\nReview:\n${JSON.stringify(inputs.reviewOutput, null, 2)}`;
       break;
 
@@ -94,7 +96,7 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
         summary: d.summary,
         rationale: d.rationale,
       }));
-      systemPrompt = getHistorianAgentPrompt(similarDecisions);
+      systemPrompt = getHistorianAgentPrompt(similarDecisions, inputs.goal, inputs.followup);
       userPrompt = `Synthesize the following outputs into a final decision:\n\nAnalysis:\n${JSON.stringify(inputs.analysisOutput, null, 2)}\n\nReview:\n${JSON.stringify(inputs.reviewOutput, null, 2)}\n\nTradeoff:\n${JSON.stringify(inputs.tradeoffOutput, null, 2)}`;
       break;
   }
@@ -128,7 +130,6 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
         generationConfig: {
           temperature: 0.2,
           maxOutputTokens: 2048,
-          responseMimeType: "application/json",
         },
       }),
     });
@@ -187,7 +188,6 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
         ],
         temperature: 0.7,
         max_tokens: 2000,
-        response_format: { type: "json_object" },
       }),
     });
 
@@ -210,21 +210,8 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
       throw new Error(`LLM response too long (${content.length} chars). Maximum allowed: 10000`);
     }
 
-    let parsed: any;
-    try {
-      const jsonText = extractJsonObject(content);
-      if (!jsonText) throw new Error("No JSON object found in model output");
-      parsed = JSON.parse(jsonText);
-
-    } catch (error) {
-      return { rawText: content };
-    }
-
-    if (!parsed || typeof parsed !== "object") {
-      throw new Error("LLM response parsed to non-object value");
-    }
-
-    return parsed;
+    // Return plain text instead of parsing JSON
+    return content.trim();
   }
 }
 
@@ -234,12 +221,16 @@ async function callAgent(role: "analysis" | "review" | "tradeoff" | "historian",
 export async function runAgents(
   artifact: Artifact,
   report: Report,
-  similarDecisions: SimilarDecision[]
+  similarDecisions: SimilarDecision[],
+  goal?: string | null,
+  followup?: string | null
 ): Promise<OrchestrationResult> {
   const inputs: AgentInputs = {
     artifact,
     report,
     similarDecisions,
+    goal,
+    followup,
   };
 
   // 1. Analysis Agent
@@ -255,31 +246,39 @@ export async function runAgents(
   inputs.tradeoffOutput = tradeoffOutput;
 
   // 4. Historian Agent
-  // const historianOutput = await callAgent("historian", inputs);
-
-  // if (!historianOutput || typeof historianOutput !== "object") {
-  //   throw new Error("Historian agent returned invalid output: not an object");
-  // }
   let historianOutput = await callAgent("historian", inputs);
 
-// If the agent returns plain text, wrap it
-if (typeof historianOutput === "string") {
-  historianOutput = {
-    decisionSummary: historianOutput.trim(),
-    decisionRationale: historianOutput.trim(),
-  };
-}
+  // Parse plain text output (format: "Summary: ... Rationale: ...")
+  let decisionSummary: string;
+  let decisionRationale: string;
 
+  if (typeof historianOutput === "string") {
+    // Try to extract Summary and Rationale from plain text
+    const summaryMatch = historianOutput.match(/Summary:\s*(.+?)(?=\n\nRationale:|\nRationale:|$)/is);
+    const rationaleMatch = historianOutput.match(/Rationale:\s*(.+?)$/is);
 
-  const decisionSummary = historianOutput.decisionSummary;
-  const decisionRationale = historianOutput.decisionRationale;
-
-  if (!decisionSummary || typeof decisionSummary !== "string" || decisionSummary.trim().length === 0) {
-    throw new Error("Historian agent output must contain decisionSummary as a non-empty string");
+    if (summaryMatch && rationaleMatch) {
+      decisionSummary = summaryMatch[1].trim();
+      decisionRationale = rationaleMatch[1].trim();
+    } else {
+      // Fallback: if format doesn't match, use the whole text as summary and rationale
+      decisionSummary = historianOutput.trim().substring(0, 500);
+      decisionRationale = historianOutput.trim();
+    }
+  } else if (typeof historianOutput === "object" && historianOutput !== null) {
+    // Handle legacy JSON format (in case agent still returns JSON)
+    decisionSummary = historianOutput.decisionSummary || historianOutput.summary || "";
+    decisionRationale = historianOutput.decisionRationale || historianOutput.rationale || "";
+  } else {
+    throw new Error("Historian agent returned invalid output");
   }
 
-  if (!decisionRationale || typeof decisionRationale !== "string" || decisionRationale.trim().length === 0) {
-    throw new Error("Historian agent output must contain decisionRationale as a non-empty string");
+  if (!decisionSummary || decisionSummary.trim().length === 0) {
+    throw new Error("Historian agent output must contain a decision summary");
+  }
+
+  if (!decisionRationale || decisionRationale.trim().length === 0) {
+    throw new Error("Historian agent output must contain a decision rationale");
   }
 
   return {
