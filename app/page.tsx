@@ -63,6 +63,7 @@ export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisData, setAnalysisData] = useState<AnalyzeResponse | null>(null);
   const [expandedDecisions, setExpandedDecisions] = useState<Set<number>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   const handleLoadExample = () => {
     setArtifactContent(EXAMPLE_ARTIFACT);
@@ -75,6 +76,7 @@ export default function Home() {
     }
 
     setIsAnalyzing(true);
+    setError(null);
     try {
       const response = await fetch('/api/analyze', {
         method: 'POST',
@@ -85,14 +87,17 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error('Analysis failed');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Analysis failed with status ${response.status}`);
       }
 
       const data: AnalyzeResponse = await response.json();
       setAnalysisData(data);
+      setError(null);
     } catch (error) {
       console.error('Error analyzing artifact:', error);
-      // For demo purposes, show empty state on error
+      const errorMessage = error instanceof Error ? error.message : 'Failed to analyze artifact. Please check your backend configuration.';
+      setError(errorMessage);
       setAnalysisData(null);
     } finally {
       setIsAnalyzing(false);
@@ -128,25 +133,34 @@ export default function Home() {
             <textarea
               value={artifactContent}
               onChange={(e) => setArtifactContent(e.target.value)}
+              spellCheck={false}
               className="w-full h-[calc(100vh-280px)] p-4 border border-gray-300 rounded-md font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Enter your design artifact here..."
             />
           </div>
-          <div className="flex gap-3">
-            <button
-              onClick={handleLoadExample}
-              disabled={isAnalyzing}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Load Example
-            </button>
-            <button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing || !artifactContent.trim()}
-              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isAnalyzing ? 'Analyzing...' : 'Analyze'}
-            </button>
+          <div className="space-y-3">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-800 font-medium">Error</p>
+                <p className="text-sm text-red-700 mt-1">{error}</p>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={handleLoadExample}
+                disabled={isAnalyzing}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Load Example
+              </button>
+              <button
+                onClick={handleAnalyze}
+                disabled={isAnalyzing || !artifactContent.trim()}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAnalyzing ? 'Analyzing...' : 'Analyze'}
+              </button>
+            </div>
           </div>
         </div>
 
