@@ -98,9 +98,10 @@ async function seedMemory() {
     }
     console.log("");
 
-    // Wait a bit for MongoDB to index
-    console.log("⏳ Waiting 2 seconds for MongoDB indexing...\n");
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Wait for MongoDB to index the first decision
+    // Vector search indexes can take a moment to update, especially on free tier
+    console.log("⏳ Waiting 3 seconds for MongoDB vector index to update...\n");
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     // Run 2: Modified artifact
     console.log("📤 Run 2: Submitting modified artifact...");
