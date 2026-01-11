@@ -166,6 +166,8 @@ export default function Home() {
               goal={goal}
               toolReport={analysisData?.toolReport || null}
               isLoading={isAnalyzing}
+              findingsStats={analysisData?.findings?.statistics}
+              findingsRaw={analysisData?.findings?.raw}
             />
           )}
 

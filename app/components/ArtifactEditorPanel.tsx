@@ -11,20 +11,30 @@ interface ArtifactEditorPanelProps {
   disabled?: boolean;
 }
 
-const EXAMPLE_ARTIFACT = `# API Gateway Design
+const EXAMPLE_ARTIFACT = `module datapath (input clk,
+                 input [31:0] x, y, z,
+                 output reg [31:0] result);
 
-## Problem
-We need to handle 10,000 requests/second with <100ms latency.
+    always @(posedge clk) begin
+        // potential timing bottleneck
+        result <= (x * y) + (z << 2);
+    end
+endmodule
 
-## Proposed Solution
-- Use Redis for caching
-- Horizontal scaling with load balancer
-- Connection pooling for database
+// Engineering intent:
+// - sustain 500–700 MHz depending on synthesis
+// - minimize dynamic power
+// - avoid adding unnecessary pipeline depth
 
-## Trade-offs
-- Redis adds operational complexity
-- Load balancer increases latency by ~5ms
-- Connection pooling requires careful tuning`;
+// Known problems in past versions:
+// - multiplier → adder → shifter chain exceeded critical path
+// - naive fixes increased area/power drastically
+
+// Agents should:
+// 1. Identify timing risks.
+// 2. Propose possible fixes.
+// 3. Argue tradeoffs (latency vs power vs area).
+// 4. Use memory: compare to prior similar decisions stored in DB.`;
 
 function getGoalButtonLabel(goal: Goal): string {
   const labels: Record<Goal, string> = {

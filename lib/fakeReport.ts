@@ -1,8 +1,30 @@
+import { runContractAnalyzer, type ContractAnalysisResult } from "./contractAnalyzer";
+
+// Store the latest contract analysis for export (module-level state)
+let latestContractAnalysis: ContractAnalysisResult | null = null;
+
+/**
+ * Get the latest contract analysis results (for export/stats)
+ */
+export function getLatestContractAnalysis(): ContractAnalysisResult | null {
+  return latestContractAnalysis;
+}
+
 /**
  * Generate a deterministic fake tool report based on content and goal.
  * No randomness, no real computation - just plausible engineering feedback.
+ * For API_CONTRACT goal, uses the deterministic contract analyzer.
  */
 export function createFakeReport(content: string, goal: string | null = null): string {
+  // Reset state first
+  latestContractAnalysis = null;
+  
+  // For API_CONTRACT goal, use the deterministic contract analyzer
+  if (goal === "API_CONTRACT") {
+    const analysis = runContractAnalyzer(content);
+    latestContractAnalysis = analysis; // Store for export/stats
+    return formatContractAnalysisReport(analysis);
+  }
   const lines = content.split("\n").length;
   const hasFunctions = content.includes("function") || content.includes("=>");
   const hasClasses = content.includes("class ");
@@ -149,5 +171,70 @@ export function createFakeReport(content: string, goal: string | null = null): s
     report += ` | Goal: ${goal}`;
   }
   
+  return report;
+}
+
+/**
+ * Format contract analysis results into a readable report string
+ */
+function formatContractAnalysisReport(analysis: ContractAnalysisResult): string {
+  let report = "Contract Analysis Report\n";
+  report += "=".repeat(report.length - 1) + "\n\n";
+  report += `Analysis Goal: ${analysis.metadata.analysisGoal}\n`;
+  report += `Lines Analyzed: ${analysis.metadata.linesAnalyzed}\n`;
+  report += `Findings: ${analysis.findings.length}\n\n`;
+
+  if (analysis.findings.length === 0) {
+    report += "No issues detected. Contract looks complete.\n";
+    return report;
+  }
+
+  // Group findings by category
+  const byCategory = {
+    missing: analysis.findings.filter((f) => f.category === "missing"),
+    ambiguous: analysis.findings.filter((f) => f.category === "ambiguous"),
+    risk: analysis.findings.filter((f) => f.category === "risk"),
+  };
+
+  if (byCategory.missing.length > 0) {
+    report += "Missing Elements:\n";
+    byCategory.missing.forEach((finding, idx) => {
+      report += `\n${idx + 1}. ${finding.rule} [${finding.severity.toUpperCase()}]\n`;
+      if (finding.evidence.length > 0) {
+        finding.evidence.forEach((ev) => {
+          report += `   - ${ev}\n`;
+        });
+      }
+    });
+    report += "\n";
+  }
+
+  if (byCategory.ambiguous.length > 0) {
+    report += "Ambiguous Definitions:\n";
+    byCategory.ambiguous.forEach((finding, idx) => {
+      report += `\n${idx + 1}. ${finding.rule} [${finding.severity.toUpperCase()}]\n`;
+      if (finding.evidence.length > 0) {
+        finding.evidence.forEach((ev) => {
+          report += `   - ${ev}\n`;
+        });
+      }
+    });
+    report += "\n";
+  }
+
+  if (byCategory.risk.length > 0) {
+    report += "Risks:\n";
+    byCategory.risk.forEach((finding, idx) => {
+      report += `\n${idx + 1}. ${finding.rule} [${finding.severity.toUpperCase()}]\n`;
+      if (finding.evidence.length > 0) {
+        finding.evidence.forEach((ev) => {
+          report += `   - ${ev}\n`;
+        });
+      }
+    });
+    report += "\n";
+  }
+
+  report += "\nAnalysis complete.\n";
   return report;
 }

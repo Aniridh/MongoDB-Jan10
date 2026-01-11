@@ -12,10 +12,29 @@ export interface Decision {
   createdAt: string;
 }
 
+export interface ContractFindingsStats {
+  total: number;
+  bySeverity: {
+    high: number;
+    medium: number;
+    low: number;
+  };
+  byCategory: {
+    missing: number;
+    ambiguous: number;
+    risk: number;
+  };
+  autoFixable: number;
+}
+
 export interface AnalyzeResponse {
   toolReport: string;
   agentMessages: AgentMessage[];
   decisions: Decision[];
+  findings?: {
+    statistics: ContractFindingsStats;
+    raw?: any; // ContractAnalysisResult for export
+  };
 }
 
 export interface AnalyzeRequest {

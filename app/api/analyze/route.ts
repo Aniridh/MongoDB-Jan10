@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { createFakeReport } from "@/lib/fakeReport";
+import { createFakeReport, getLatestContractAnalysis } from "@/lib/fakeReport";
 import {
   embedText,
   findSimilarDecisions,
@@ -227,7 +227,16 @@ export async function POST(request: NextRequest) {
       ...newDecision,
     };
 
-    // 8. Return structured JSON
+    // 8. Get contract analysis findings if available (for API_CONTRACT goal)
+    const contractAnalysis = getLatestContractAnalysis();
+    const findings = contractAnalysis
+      ? {
+          statistics: contractAnalysis.metadata.statistics,
+          raw: contractAnalysis, // Include full analysis for export
+        }
+      : undefined;
+
+    // 9. Return structured JSON
     return NextResponse.json({
       toolReport,
       agentMessages: agentMessages.map((msg) => ({
@@ -243,6 +252,7 @@ export async function POST(request: NextRequest) {
           createdAt: decision.createdAt.toISOString(),
         },
       ],
+      findings,
     });
   } catch (error) {
     console.error("Error in /api/analyze:", error);
