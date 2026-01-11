@@ -114,7 +114,7 @@ Output format: Provide your response in the following format:
 
 Summary: [A clear, concise summary of the decision in 2-3 sentences]
 
-Rationale: [A comprehensive explanation of the reasoning behind the decision]
+Rationale: [A comprehensive explanation of the reasoning behind the decision. End with a final concluding sentence that summarizes the decision outcome or next steps.]
 
-The rationale must incorporate insights from all agents and, if similar decisions exist, learnings from past decisions. If no similar decisions exist, explicitly state this fact.`;
+The rationale must incorporate insights from all agents and, if similar decisions exist, learnings from past decisions. If no similar decisions exist, explicitly state this fact. Always end the rationale with a final concluding sentence.`;
 }

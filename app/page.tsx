@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { AnalyzeResponse } from '@/types';
-import { VisiblShell } from './components/VisiblShell';
+import { ChipperShell } from './components/ChipperShell';
 import { HeaderBar } from './components/HeaderBar';
 import { ArtifactEditorPanel } from './components/ArtifactEditorPanel';
 import { type Goal } from './components/GoalSelector';
@@ -101,7 +101,7 @@ export default function Home() {
   const hasResults = analysisData || isAnalyzing;
 
   return (
-    <VisiblShell>
+    <ChipperShell>
       {/* Header */}
       <HeaderBar />
 
@@ -192,6 +192,6 @@ export default function Home() {
           )}
         </div>
       </div>
-    </VisiblShell>
+    </ChipperShell>
   );
 }

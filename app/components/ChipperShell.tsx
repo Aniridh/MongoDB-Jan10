@@ -1,10 +1,10 @@
 import React from 'react';
 
-interface VisiblShellProps {
+interface ChipperShellProps {
   children: React.ReactNode;
 }
 
-export function VisiblShell({ children }: VisiblShellProps) {
+export function ChipperShell({ children }: ChipperShellProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50">
       {/* Animated background pattern */}

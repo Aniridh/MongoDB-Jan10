@@ -1,4 +1,4 @@
-# Visibl - AI-Native Engineering Design Notebook
+# Chipper - AI-Native Engineering Design Notebook
 
 A demo-ready single-page web UI that visualizes multi-agent reasoning and MongoDB-backed memory for engineering design artifacts.
 

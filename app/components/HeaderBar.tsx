@@ -6,15 +6,15 @@ export function HeaderBar() {
       <div className="flex items-center justify-between">
         {/* Left side - Logo and subtitle */}
         <div className="flex items-center gap-3">
-          {/* Visibl logo icon */}
+          {/* Chipper logo icon */}
           <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-400/20 to-sky-400/20 border border-cyan-400/30 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
             <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-sky-400">
-              V
+              C
             </span>
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-sky-400">
-              Visibl
+              Chipper
             </h1>
             <p className="mt-0.5 text-sm text-slate-400 tracking-wide">
               AI-Native Engineering Design Notebook
